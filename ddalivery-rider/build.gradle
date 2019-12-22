@@ -1,0 +1,143 @@
+plugins {
+    id 'org.asciidoctor.convert'
+    id 'org.springframework.boot'
+    id 'java'
+}
+
+apply plugin: 'io.spring.dependency-management'
+group = 'lyj.ddalivery.rider'
+version = '1.0-RELEASE'
+sourceCompatibility = '11'
+targetCompatibility = '11'
+
+// https://docs.spring.io/spring-boot/docs/current/gradle-plugin/reference/html/#packaging-executable-and-normal
+// https://java.ihoney.pe.kr/514
+jar {
+    enabled = false
+}
+bootJar {
+    launchScript()
+}
+
+configurations {
+    compileOnly {
+        extendsFrom annotationProcessor
+    }
+}
+
+repositories {
+    mavenCentral()
+}
+
+ext {
+    set('snippetsDir', file("build/generated-snippets"))
+}
+
+def queryDslVersion = '4.2.1'
+def log4j2Version = '2.12.0'
+def slf4jVersion = '1.7.26'
+def commonsLoggingVersion = '1.2'
+
+
+configurations {
+    // exclude embeded tomcat
+//    compile.exclude module: 'spring-boot-starter-tomcat'
+    // exclude logback. for use log4j2 lazy evaluation logger.
+//    compile.exclude module: 'spring-boot-starter-logging'
+}
+
+dependencies {
+    //compile(":api-common")
+    implementation 'org.springframework.boot:spring-boot-starter-actuator'
+    implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
+    implementation 'org.springframework.boot:spring-boot-starter-web'
+    //implementation 'org.springframework.boot:spring-boot-starter-jetty'
+//    implementation 'org.springframework.boot:spring-boot-starter-undertow'
+//    implementation 'org.springframework.boot:spring-boot-starter-log4j2'
+    implementation "org.cache2k:cache2k-api:1.2.2.Final"
+    implementation "org.cache2k:cache2k-spring:1.2.2.Final"
+    implementation "org.cache2k:cache2k-core:1.2.2.Final"
+    //compileOnly 'org.projectlombok:lombok'
+    runtimeOnly 'com.h2database:h2'
+    runtimeOnly 'mysql:mysql-connector-java'
+//    runtimeOnly 'org.mysql.jdbc:mysql-java-client'
+    annotationProcessor 'org.springframework.boot:spring-boot-configuration-processor'
+    annotationProcessor 'org.projectlombok:lombok'
+
+    asciidoctor("org.springframework.restdocs:spring-restdocs-asciidoctor:2.0.2.RELEASE")
+    testImplementation 'org.springframework.boot:spring-boot-starter-test'
+    testImplementation 'org.springframework.restdocs:spring-restdocs-mockmvc'
+
+    // SLF4J-Log4j2
+//    compile("commons-logging:commons-logging:${commonsLoggingVersion}")
+//    compile("org.slf4j:slf4j-api:${slf4jVersion}")
+//    compile("org.apache.logging.log4j:log4j-api:${log4j2Version}")
+//    compile("org.apache.logging.log4j:log4j-core:${log4j2Version}")
+//    compile("org.apache.logging.log4j:log4j-slf4j-impl:${log4j2Version}")
+//    // https://mvnrepository.com/artifact/org.apache.logging.log4j/log4j-web
+    compile group: 'org.apache.logging.log4j', name: 'log4j-web', version: "${log4j2Version}"
+    // fix 'illegal reflective access operation has occurred' https://github.com/jboss-javassist/javassist/issues/214
+    compile group: 'org.javassist', name: 'javassist', version: '3.25.0-GA'
+    // https://mvnrepository.com/artifact/cglib/cglib
+    compile group: 'cglib', name: 'cglib', version: '3.2.12'
+
+
+    //Lombok & QueryDSL
+    // Gradle 4.6 이후 연동 방식이 대폭 변경됨 https://netframework.tistory.com/search/querydsl
+    //annotationProcessor("org.projectlombok:lombok:1.18.4") // Gradle 4.6 and later
+    compile "com.querydsl:querydsl-core:${queryDslVersion}"
+    compile "com.querydsl:querydsl-sql:${queryDslVersion}"
+    compile "com.querydsl:querydsl-sql-spring:${queryDslVersion}"
+    compile "com.querydsl:querydsl-jpa:${queryDslVersion}"
+    compile 'org.projectlombok:lombok:1.18.4'
+    annotationProcessor(
+            "com.querydsl:querydsl-apt:${queryDslVersion}:jpa",
+            "org.hibernate.javax.persistence:hibernate-jpa-2.1-api:1.0.2.Final",
+            "javax.annotation:javax.annotation-api:1.3.2",
+            "org.projectlombok:lombok"
+    )
+}
+
+test {
+    outputs.dir snippetsDir
+}
+
+asciidoctor {
+    inputs.dir snippetsDir
+    dependsOn test
+}
+
+// QueryDSL
+// Gradle 4.6 이후 연동 방식이 변경됨 https://netframework.tistory.com/search/querydsl, https://qiita.com/kakasak/items/ae6a1335d68e06172d4d
+def queryDslDir = "./out/production/classes/generated"
+//def queryDslDir = "src/main/generated"
+def queryDslOutput = file("${queryDslDir}")
+sourceSets {
+    main {
+        java {
+            srcDir queryDslDir
+        }
+    }
+}
+
+compileJava.doFirst {
+    delete file("${queryDslDir}/com")
+    ant.echo(message: "compileJava... we successully deleted files")
+}
+
+def gradleGeneratedDir = "./build/generated/source/apt"
+def gradleQueryDslOutput = file("${gradleGeneratedDir}")
+
+task cleanUpQueryDsl(type: Copy) {
+    from "${gradleGeneratedDir}/main"
+    into "${queryDslDir}"
+    doLast {
+        delete gradleQueryDslOutput
+    }
+}
+compileJava.finalizedBy(cleanUpQueryDsl)
+
+clean {
+    delete gradleQueryDslOutput
+    delete queryDslOutput
+}
