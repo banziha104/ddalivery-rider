@@ -1,0 +1,6 @@
+[submodule "ddalivery-core"]
+	path = ddalivery-core
+	url = https://github.com/banziha104/ddalivery-core.git
+[submodule "ddalivery-common"]
+	path = ddalivery-common
+	url = https://github.com/banziha104/ddalivery-common.git
